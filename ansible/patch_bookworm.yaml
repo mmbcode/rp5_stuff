@@ -1,0 +1,25 @@
+---
+- hosts: RP5N
+  become: true
+  gather_facts: false
+  serial: 1
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+      
+    - name: Perform a full system upgrade
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: yes
+      register: upgrade_result
+
+    - name: Reboot if required
+      ansible.builtin.reboot:
+      when: upgrade_result.changed
+      
+    - name: Wait for system to come back online
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 300
