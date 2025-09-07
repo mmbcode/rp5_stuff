@@ -1,7 +1,34 @@
 ---
-- hosts: RP5N
-  become: true
+- name: Discover the AWX and PostgreSQL nodes
+  hosts: localhost
   gather_facts: false
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+    - name: Get AWX web pod info to find its node
+      community.kubernetes.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: awx
+        label_selector: "app.kubernetes.io/component=awx-web"
+      register: awx_pod_info
+      
+    - name: Get PostgreSQL pod info to find its node
+      community.kubernetes.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: awx
+        label_selector: "app.kubernetes.io/component=awx-postgres"
+      register: postgres_pod_info
+
+    - name: Set facts for the AWX and Postgres node names
+      ansible.builtin.set_fact:
+        awx_node_name: "{{ awx_pod_info.resources[0].spec.nodeName }}"
+        postgres_node_name: "{{ postgres_pod_info.resources[0].spec.nodeName }}"
+
+- name: Patch and reboot all other nodes
+  hosts: "RP5N:!{{ awx_node_name }}:!{{ postgres_node_name }}"
+  become: true
   serial: 1
 
   tasks:
@@ -14,7 +41,7 @@
         upgrade: full
         autoremove: yes
       register: upgrade_result
-
+      
     - name: Reboot if required
       ansible.builtin.reboot:
       when: upgrade_result.changed
@@ -23,3 +50,12 @@
       ansible.builtin.wait_for_connection:
         delay: 5
         timeout: 300
+      when: upgrade_result.changed
+
+- name: Report which nodes were not patched
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Display the names of the skipped nodes
+      ansible.builtin.debug:
+        msg: "The nodes {{ awx_node_name }} and {{ postgres_node_name }} not patched running AWX components."
