@@ -5,11 +5,19 @@
   vars:
     ansible_python_interpreter: /usr/bin/python3
   tasks:
+    - name: Write kubeconfig to a temporary file
+      ansible.builtin.copy:
+        content: "{{ kubeconfig_content }}"
+        dest: /tmp/kubeconfig
+        mode: '0600'
+      delegate_to: localhost
+
     - name: Get AWX web pod info to find its node
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Pod
         namespace: awx
+        kubeconfig: /tmp/kubeconfig
         label_selectors:
           - "app.kubernetes.io/component=awx-web"
       register: awx_pod_info
@@ -19,6 +27,7 @@
         api_version: v1
         kind: Pod
         namespace: awx
+        kubeconfig: /tmp/kubeconfig
         label_selectors:
           - "app.kubernetes.io/component=awx-postgres"
       register: postgres_pod_info
