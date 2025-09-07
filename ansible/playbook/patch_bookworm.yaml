@@ -6,19 +6,21 @@
     ansible_python_interpreter: /usr/bin/python3
   tasks:
     - name: Get AWX web pod info to find its node
-      community.kubernetes.k8s_info:
+      kubernetes.core.k8s_info:
         api_version: v1
         kind: Pod
         namespace: awx
-        label_selectors: "app.kubernetes.io/component=awx-web"
+        label_selectors:
+          - "app.kubernetes.io/component=awx-web"
       register: awx_pod_info
-      
+
     - name: Get PostgreSQL pod info to find its node
-      community.kubernetes.k8s_info:
+      kubernetes.core.k8s_info:
         api_version: v1
         kind: Pod
         namespace: awx
-        label_selectors: "app.kubernetes.io/component=awx-postgres"
+        label_selectors:
+          - "app.kubernetes.io/component=awx-postgres"
       register: postgres_pod_info
 
     - name: Set facts for the AWX and Postgres node names
@@ -26,7 +28,7 @@
         awx_node_name: "{{ awx_pod_info.resources[0].spec.nodeName }}"
         postgres_node_name: "{{ postgres_pod_info.resources[0].spec.nodeName }}"
 
-- name: Patch and reboot all other nodes
+- name: Patch and reboot all non-AWX nodes
   hosts: "RP5N:!{{ awx_node_name }}:!{{ postgres_node_name }}"
   become: true
   serial: 1
@@ -58,4 +60,4 @@
   tasks:
     - name: Display the names of the skipped nodes
       ansible.builtin.debug:
-        msg: "The nodes {{ awx_node_name }} and {{ postgres_node_name }} not patched running AWX components."
+        msg: "The nodes {{ awx_node_name }} and {{ postgres_node_name }} were not patched because they are running AWX components."
