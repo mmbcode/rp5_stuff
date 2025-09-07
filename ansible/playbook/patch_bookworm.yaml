@@ -10,7 +10,7 @@
         api_version: v1
         kind: Pod
         namespace: awx
-        label_selector: "app.kubernetes.io/component=awx-web"
+        label_selectors: "app.kubernetes.io/component=awx-web"
       register: awx_pod_info
       
     - name: Get PostgreSQL pod info to find its node
@@ -18,7 +18,7 @@
         api_version: v1
         kind: Pod
         namespace: awx
-        label_selector: "app.kubernetes.io/component=awx-postgres"
+        label_selectors: "app.kubernetes.io/component=awx-postgres"
       register: postgres_pod_info
 
     - name: Set facts for the AWX and Postgres node names
