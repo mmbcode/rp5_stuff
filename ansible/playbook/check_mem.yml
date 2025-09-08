@@ -1,0 +1,8 @@
+---
+- name: Report memory on RP5N nodes
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: Show total memory
+      debug:
+        msg: "Total memory on {{ inventory_hostname }} is {{ ansible_memtotal_mb }} MB"
