@@ -5,43 +5,22 @@
   gather_facts: yes
   become: yes
 
-  pre_tasks:
-    - name: Ensure pip is installed
-      apt:
-        name: python3-pip
-        state: present
-        update_cache: yes
-
-    - name: Install Kubernetes Python client
-      pip:
-        name: kubernetes
-        executable: pip3
-
-    - name: Get AWX pods from Kubernetes
-      kubernetes.core.k8s_info:
-        kind: Pod
-        namespace: awx
-      register: awx_pods
-
-    - name: Extract AWX node names
-      set_fact:
-        awx_nodes: "{{ awx_pods.resources | map(attribute='spec.nodeName') | list | unique }}"
-
-- name: Patch nodes
-  hosts: all
-  serial: 1
-  gather_facts: yes
-  become: yes
-
   tasks:
-    - name: Mark node as AWX host
+    - name: Check if AWX container is running on this node
+      ansible.builtin.command:
+        cmd: crictl ps | grep awx
+      register: awx_check
+      changed_when: false
+      failed_when: false
+
+    - name: Mark node as AWX host if AWX container is found
       set_fact:
         is_awx_node: true
-      when: inventory_hostname in awx_nodes
+      when: awx_check.stdout != ""
 
     - name: Report AWX node
-      debug:
-        msg: "Skipping AWX node {{ inventory_hostname }} because AWX pod is running here"
+      ansible.builtin.debug:
+        msg: "Skipping AWX node {{ inventory_hostname }} because AWX container is running"
       when: is_awx_node | default(false)
 
     - name: Update package cache
