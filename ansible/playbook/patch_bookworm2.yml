@@ -31,22 +31,18 @@
       when: not is_awx_node | default(false)
 
     - name: Update package cache
-      apt:
+      ansible.builtin.apt:
         update_cache: yes
       when: not is_awx_node | default(false)
 
-    - name: Upgrade packages
-      apt:
-        upgrade: dist
-      when: not is_awx_node | default(false)
-
-    - name: Autoremove unused packages
-      apt:
+    - name: Perform full upgrade and autoremove
+      ansible.builtin.apt:
+        upgrade: full
         autoremove: yes
       when: not is_awx_node | default(false)
 
     - name: Reboot the node
-      reboot:
+      ansible.builtin.reboot:
         msg: "Rebooting after patching"
         reboot_timeout: 600
       when: not is_awx_node | default(false)
