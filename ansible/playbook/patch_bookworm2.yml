@@ -6,6 +6,17 @@
   become: yes
 
   pre_tasks:
+    - name: Ensure pip is installed
+      apt:
+        name: python3-pip
+        state: present
+        update_cache: yes
+
+    - name: Install Kubernetes Python client
+      pip:
+        name: kubernetes
+        executable: pip3
+
     - name: Get AWX pods from Kubernetes
       kubernetes.core.k8s_info:
         kind: Pod
@@ -53,4 +64,3 @@
         - not is_awx_node | default(false)
         - upgrade_result is defined
         - upgrade_result.changed
-
