@@ -30,8 +30,23 @@
         done
       when: not is_awx_node | default(false)
 
-    - name: Patch node
+    - name: Update package cache
       apt:
         update_cache: yes
+      when: not is_awx_node | default(false)
+
+    - name: Upgrade packages
+      apt:
         upgrade: dist
+      when: not is_awx_node | default(false)
+
+    - name: Autoremove unused packages
+      apt:
+        autoremove: yes
+      when: not is_awx_node | default(false)
+
+    - name: Reboot the node
+      reboot:
+        msg: "Rebooting after patching"
+        reboot_timeout: 600
       when: not is_awx_node | default(false)
