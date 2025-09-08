@@ -1,0 +1,37 @@
+---
+- name: Patch Bookworm nodes except AWX host
+  hosts: all
+  serial: 1
+  gather_facts: yes
+  become: yes
+
+  tasks:
+    - name: Check if AWX container is running on this node
+      shell: |
+        crictl ps | grep awx
+      register: awx_check
+      changed_when: false
+      failed_when: false
+
+    - name: Mark node as AWX host if AWX container is found
+      set_fact:
+        is_awx_node: true
+      when: awx_check.stdout != ""
+
+    - name: Report AWX node
+      debug:
+        msg: "Skipping AWX node {{ inventory_hostname }} because AWX container is running"
+      when: is_awx_node | default(false)
+
+    - name: Wait for apt lock to be released
+      shell: |
+        while fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+          sleep 1
+        done
+      when: not is_awx_node | default(false)
+
+    - name: Patch node
+      apt:
+        update_cache: yes
+        upgrade: dist
+      when: not is_awx_node | default(false)
