@@ -39,10 +39,14 @@
       ansible.builtin.apt:
         upgrade: full
         autoremove: yes
+      register: upgrade_result
       when: not is_awx_node | default(false)
 
-    - name: Reboot the node
+    - name: Reboot the node if packages were upgraded
       ansible.builtin.reboot:
         msg: "Rebooting after patching"
         reboot_timeout: 600
-      when: not is_awx_node | default(false)
+      when:
+        - not is_awx_node | default(false)
+        - upgrade_result is defined
+        - upgrade_result.changed
