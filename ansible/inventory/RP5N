@@ -1,2 +1,2 @@
 [RP5N]
-rp5n[1:6] ansible_host=192.168.1.20[1:6]
+rp5n[1:8] ansible_host=192.168.1.20[1:8]
