@@ -1,0 +1,93 @@
+---
+# 1. Retrieve Cluster Token from the Master Node (rp5n1)
+- name: Retrieve K3s Cluster Token from Master (rp5n1)
+  hosts: k3s_master
+  become: yes
+  gather_facts: no
+  
+  tasks:
+    - name: Read the K3s cluster token from the master
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_file
+    
+    - name: Set the cluster token as a fact for the target node (rp5n7)
+      ansible.builtin.set_fact:
+        # Decode and strip leading/trailing whitespace
+        k3s_cluster_token: "{{ k3s_token_file.content | b64decode | trim }}"
+      # Delegate the fact to the target host (rp5n7) so the next play can use it
+      delegate_to: "{{ groups['k3s_target'][0] }}"
+      delegate_facts: yes
+
+# 2. Install and Configure K3s Agent on Target Node (rp5n7)
+- name: Install and Configure K3s Agent on Target Node (rp5n7)
+  hosts: k3s_target
+  become: yes
+  vars:
+    # Master's IP/hostname is rp5n1
+    k3s_master_host: "{{ groups['k3s_master'][0] }}"
+    # The token is retrieved from 'hostvars' of the target node where it was delegated
+    k3s_cluster_token: "{{ hostvars[inventory_hostname].k3s_cluster_token }}"
+  
+  tasks:
+    - name: Ensure K3s Agent service is installed and running
+      # The K3S_URL points to the master (rp5n1) and uses the retrieved K3S_TOKEN
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | K3S_URL=https://{{ k3s_master_host }}:6443 K3S_TOKEN={{ k3s_cluster_token }} sh -
+      args:
+        # Prevent running this task if the K3s agent is already installed
+        creates: /etc/systemd/system/k3s-agent.service
+      when: k3s_cluster_token is defined
+
+# 3. Copy Kubeconfig and Set up Kubectl on the Target Node (rp5n7)
+- name: Copy Kubeconfig and Setup Kubectl on Target Node (rp5n7)
+  hosts: k3s_target
+  become: yes
+  vars:
+    # Define the K3s master host for delegation
+    k3s_master_host: "{{ groups['k3s_master'][0] }}"
+    
+  tasks:
+    - name: Fetch the Kubeconfig file from the master (rp5n1)
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /tmp/k3s.yaml
+        flat: yes
+      delegate_to: "{{ k3s_master_host }}"
+      # The 'fetch' module brings the file to the Ansible control machine
+      
+    - name: Create the .kube directory on the target host (rp5n7)
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.kube
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: '0700'
+
+    - name: Copy the Kubeconfig from Ansible Control Machine to the target host
+      ansible.builtin.copy:
+        # Note: The fetch module stores the file in a directory structure based on the host
+        src: /tmp/k3s.yaml/{{ k3s_master_host }}/etc/rancher/k3s/k3s.yaml
+        dest: /home/{{ ansible_user }}/.kube/config
+        owner: "{{ ansible_user }}"
+        remote_src: no # Source is on the Ansible control node
+        mode: '0600'
+
+    - name: Replace localhost IP in Kubeconfig with the Master's IP (rp5n1)
+      ansible.builtin.lineinfile:
+        path: /home/{{ ansible_user }}/.kube/config
+        regexp: 'https://127.0.0.1:6443'
+        line: "server: https://{{ k3s_master_host }}:6443"
+        backrefs: yes
+      
+    - name: Set KUBECONFIG environment variable for the user
+      ansible.builtin.lineinfile:
+        path: "/home/{{ ansible_user }}/.bashrc"
+        line: 'export KUBECONFIG=$HOME/.kube/config'
+        create: yes
+        insertafter: EOF
+        owner: "{{ ansible_user }}"
+        mode: '0644'
+        
+    - name: Inform user to reload shell profile
+      ansible.builtin.debug:
+        msg: "Kubeconfig is set on rp5n7. Run 'source ~/.bashrc' on rp5n7 to start using kubectl."
